@@ -48,7 +48,7 @@ Since our collected ICH datasets are unavailable, we construct simulated dataset
 ## Illustrations (red for wrong predictions)
 
 ## UNet in Task 1  
-<img src="https://github.com/chihchiehchen/ICH-TEST-BENCHMARK/blob/main/NonlocalMNIST/pic/unet_check_394.png" height="240px" width="240px" /><img src="https://github.com/chihchiehchen/ICH-TEST-BENCHMARK/blob/main/NonlocalMNIST/pic/unet_check_4563.png" height="240px" width="240px" />
+<img src="https://github.com/chihchiehchen/ICH_benchmark/blob/main/NonlocalMNIST/pic/unet_check_394.png" height="240px" width="240px" /><img src="https://github.com/chihchiehchen/ICH_benchmark/blob/main/NonlocalMNIST/pic/unet_check_4563.png" height="240px" width="240px" />
 
 ## UNETR in Task 2  
-<img src="https://github.com/chihchiehchen/ICH-TEST-BENCHMARK/blob/main/NonlocalMNIST/pic/unetr_check_183.png" height="240px" width="240px" /><img src="https://github.com/chihchiehchen/ICH-TEST-BENCHMARK/blob/main/NonlocalMNIST/pic/unetr_check_1840.png" height="240px" width="240px" />
+<img src="https://github.com/chihchiehchen/ICH_benchmark/blob/main/NonlocalMNIST/pic/unetr_check_183.png" height="240px" width="240px" /><img src="https://github.com/chihchiehchen/ICH_benchmark/blob/main/NonlocalMNIST/pic/unetr_check_1840.png" height="240px" width="240px" />
