@@ -36,8 +36,8 @@ class ICH_B_Dataset(Dataset):
         self.img_dir = os.path.join(root_dir, 'images')
         self.mask_dir = os.path.join(root_dir, 'labels')
         self.img_size = img_size
-        self.case_stat = json.load(open('/home/chihchieh/BHSD/stat_report.json', 'rb'))
-        self.slice_stat = json.load(open('/home/chihchieh/BHSD/slice_stat.json', 'rb'))
+        self.case_stat = json.load(open('./stat_report.json', 'rb'))
+        self.slice_stat = json.load(open('./slice_stat.json', 'rb'))
         self.id_to_label = {1:'edh',2:'ich',5:'ivh',4:'sah',3:'sdh'}
         self.nb_classes = nb_classes
         self.mode = mode
