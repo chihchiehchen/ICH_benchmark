@@ -336,13 +336,80 @@ class UNext(nn.Module):
 
         return self.final(out)
 
+class PreActBlock(nn.Module):
+    def __init__(self, in_planes, planes, stride=1):
+        super(PreActBlock, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+
+        if stride != 1 or in_planes != planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride, bias=False)
+            )
+
+        # SE layers
+        self.fc1 = nn.Conv2d(planes, planes//16, kernel_size=1)
+        self.fc2 = nn.Conv2d(planes//16, planes, kernel_size=1)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(x))
+        shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
+        out = self.conv1(out)
+        out = self.conv2(F.relu(self.bn2(out)))
+
+        # Squeeze
+        w = F.avg_pool2d(out, out.size(2))
+        w = F.relu(self.fc1(w))
+        w = F.sigmoid(self.fc2(w))
+        # Excitation
+        out = out * w
+
+        out += shortcut
+        return out
+
+class SENet(nn.Module):
+    def __init__(self, in_ch,block, num_blocks, num_classes=2):
+        super(SENet, self).__init__()
+        self.in_planes = 64
+
+        self.conv1 = nn.Conv2d(in_ch, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=1)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.linear = nn.Linear(512, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1]*(num_blocks-1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
 
 
+def SENet18(in_ch,num_classes):
+    return SENet(in_ch,PreActBlock, [2,2,1,2],num_classes=num_classes)
 
 
 class hourglass_mid(nn.Module):
     #rewrite the bottleneck layers of UNeXt
-    def __init__(self, num_heads= 1,embed_dims=[ 128, 160, 256],qkv_bias=False, norm_layer=nn.LayerNorm,qk_scale=None,attn_drop_rate=0.,drop_rate=0.,sr_ratios=8,dpr=0):
+    def __init__(self, num_heads= 1,embed_dims=[ 128, 160, 256],qkv_bias=False, norm_layer=nn.LayerNorm,qk_scale=None,attn_drop_rate=0.,drop_rate=0.,sr_ratios=8,dpr=0,return_latent= False):
         super(hourglass_mid,self).__init__()
         self.block1 = shiftedBlock(
             dim=embed_dims[1], num_heads=num_heads, mlp_ratio=1, qkv_bias=qkv_bias, qk_scale=qk_scale,
@@ -379,6 +446,7 @@ class hourglass_mid(nn.Module):
         self.dnorm4 = norm_layer(embed_dims[0])
         self.dbn1 = nn.BatchNorm2d(embed_dims[1])
         self.dbn2 = nn.BatchNorm2d(embed_dims[0])
+        self.return_latent = return_latent
     def forward(self,x):
         B = x.shape[0]
         t3 = x
@@ -400,7 +468,7 @@ class hourglass_mid(nn.Module):
         out = self.block2(out, H, W)
         out = self.norm4(out)
         out = out.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-
+        latent_class = out
         ### Stage 4
 
         out = F.relu(F.interpolate(self.dbn1(self.decoder1(out)),scale_factor=(2,2),mode ='bilinear'))
@@ -425,12 +493,13 @@ class hourglass_mid(nn.Module):
 
         out = self.dnorm4(out)
         out = out.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-
+        if self.return_latent:
+            return out, latent_class
         return out
 
 
 class hourglass_iter(nn.Module):
-    def __init__(self, in_chans,embed_dims):
+    def __init__(self, in_chans,embed_dims, return_latent = False):
         super(hourglass_iter,self).__init__()
         self.l = len(in_chans)
         assert self.l >= 2
@@ -445,8 +514,8 @@ class hourglass_iter(nn.Module):
         self.in_conv = nn.Conv2d(in_channels=in_chans[-1], out_channels=embed_dims[0], kernel_size=1, stride=1, padding=0, dilation=1)
         self.out_conv = nn.Conv2d(in_channels=embed_dims[0], out_channels=in_chans[-1], kernel_size=1, stride=1, padding=0, dilation=1)
         
-        self.bottleneck = hourglass_mid(embed_dims=embed_dims)
-        
+        self.bottleneck = hourglass_mid(embed_dims=embed_dims,return_latent=return_latent)
+        self.return_latent = return_latent
     def forward(self,x ):
         out = x 
         down_list = [] 
@@ -455,12 +524,14 @@ class hourglass_iter(nn.Module):
             down_list.append(out)
 
         out = self.bottleneck(out)
+        latent_class = out
         for i in range(self.l -2):
             out = F.relu(F.interpolate(self.dbn_list[self.l-3-i](self.dec_list[self.l-2-i](out)),scale_factor=(2,2),mode ='bilinear'))
         
             out = torch.add(out,down_list[self.l-3-i])
         out = F.relu(F.interpolate((self.dec_list[0](out)),scale_factor=(2,2),mode ='bilinear'))
-              
+        if self.return_latent:
+            return out, latent_class     
         return out 
 
 
@@ -482,7 +553,7 @@ class UTM(nn.Module):
 class UTM_sup(nn.Module):
     def __init__(self,out_ch,embed_dims=[ 128, 192, 256],in_chans =[32,64,128] ,num_classes = 6, rev = True):
         super(UTM_sup,self).__init__()
-        self.multires = hourglass_iter(embed_dims=embed_dims,in_chans =in_chans)
+        self.multires = hourglass_iter(embed_dims=embed_dims,in_chans =in_chans,return_latent=True)
         self.norm = nn.BatchNorm2d(in_chans[0])
         self.final = nn.Conv2d(out_ch, num_classes, kernel_size=1)
         if rev:
@@ -493,7 +564,7 @@ class UTM_sup(nn.Module):
         self.act = nn.GELU()
         self.rev = rev
     def forward(self, x):
-        out = self.multires(x)
+        out, latent_class = self.multires(x)
         if self.rev:
         
             seg_out = self.final(out)
@@ -506,7 +577,7 @@ class UTM_sup(nn.Module):
             out += self.skip(x)
             seg_out = self.final(out)
 
-        return self.act(out),seg_out
+        return self.act(out),latent_class,seg_out
 
 
 
@@ -535,14 +606,14 @@ class SUTM_I(nn.Module):
         self.backbone = nn.ModuleList( [UTM_sup(in_chans = in_chans,out_ch = 32,embed_dims=embed_dims,num_classes= num_classes,rev = True) for i in range(b_l-1)] +[UTM_sup(in_chans = in_chans, out_ch = 32,embed_dims=embed_dims,num_classes= num_classes,rev = False) ] )
         
         self.l = b_l
-        
+        #self.classification = SENet18(in_ch= embed_dims[-1] ,num_classes=2)
 
     def forward(self, x):
         
         out = self.coord(x)
         finallist = []
         for i in range(self.l):
-            out,seg_out = self.backbone[i](out)
+            out,latent_class,seg_out = self.backbone[i](out)
             finallist.append(seg_out)
-        
-        return finallist
+        #c_out = self.classification(latent_class)
+        return finallist #, c_out

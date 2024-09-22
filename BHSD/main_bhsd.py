@@ -141,17 +141,25 @@ def train(model, trainloader, valloader, optimizer, args ,lr_scheduler = None):
             
             l_pred = model(l_img)
             
-            
-
             criterion = CrossEntropyLoss(weight = class_weights)
             criterionLS = levelsetLoss()
             criterionTV = gradientLoss2d()
-            
-            ce_loss = 3*criterion(l_pred, l_mask.long())
-            loss_L = criterionLS(l_pred, l_mask.long(),args.nb_classes)
-            loss_A = criterionTV(l_pred) *args.tv
             criterionD = DiceLoss(include_background=True,to_onehot_y=True, softmax= True,reduction='mean')
-            d_loss = criterionD(l_pred, torch.unsqueeze(l_mask,1))
+            if args.model =='sutm-i':
+                pred_len = len(l_pred)
+                ce_list = [3*criterion(l_pred[i], l_mask.long()) for i in range(pred_len)]
+                ce_loss = sum(ce_list)
+            
+                loss_L = criterionLS(l_pred[-1], l_mask.long(),args.nb_classes)
+                loss_A = criterionTV(l_pred[-1]) *args.tv
+            
+                d_loss = criterionD(l_pred[-1], torch.unsqueeze(l_mask,1))
+            else:
+                ce_loss = 3*criterion(l_pred, l_mask.long())
+                loss_L = criterionLS(l_pred, l_mask.long(),args.nb_classes)
+                loss_A = criterionTV(l_pred) *args.tv
+            
+                d_loss = criterionD(l_pred, torch.unsqueeze(l_mask,1))
             loss = ce_loss + d_loss+ args.r_ratio*(loss_L+loss_A)
          
             optimizer.zero_grad()
@@ -183,7 +191,10 @@ def train(model, trainloader, valloader, optimizer, args ,lr_scheduler = None):
                 img, mask, l_mask_name, l_stat = element[0],element[1],element[2],element[3]
                 img = img.cuda()
                 pred = model(img)
-                pred = torch.argmax(pred, dim=1)
+                if args.model == 'sutm-i':
+                    pred = torch.argmax(pred[-1], dim=1)
+                else:
+                    pred = torch.argmax(pred, dim=1)
 
                 metric.add_batch(pred.cpu().numpy(), mask.numpy())
                 mIOU = metric.evaluate()[-1]
