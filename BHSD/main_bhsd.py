@@ -17,7 +17,7 @@ from network.monai_net import Resunet, UNETR_2d, U_Net_vanilla,UNETR_coord #,Swi
 from sklearn.metrics import confusion_matrix
 from network.monai_net import  UNETR_2d,U_Net_vanilla,SwinUNETR_2d
 from network.vanilla_unet import U_Net_coord
-from network.archs import UNext,SUTM 
+from network.archs import UNext,SUTM ,SUTM_I
 from ich_dataset_bhsd import ICH_B_Dataset
 from ms_loss import levelsetLoss,gradientLoss2d
 import torchvision.utils as v_utils
@@ -41,8 +41,8 @@ def parse_args():
     parser.add_argument('--mixup', type=int, default=-100)
     parser.add_argument('--agc', type=bool, default=False)
     parser.add_argument('--parallel', type=bool, default=False)
-    parser.add_argument('--model', type=str, choices=['unet','unet_coord','sutm','unetr','swinunetr'],
-                        default='unext')  #todo 
+    parser.add_argument('--model', type=str, choices=['unet','unet_coord','sutm','unetr','swinunetr','sutm-i'],
+                        default='sutm')  #todo 
     parser.add_argument('--opt', type=str, default='AdamW')
     # semi-supervised settings
     parser.add_argument('--in-ch', type=int, default=3)
@@ -84,7 +84,7 @@ def main(args):
         json.dump(stats, f)  
 
 def init_basic_elems(args):
-    model_zoo = {'unet': U_Net_vanilla,'unetr': UNETR_2d,'unet_coord':U_Net_coord,'sunext':SUTM, 'swinunetr': SwinUNETR_2d}
+    model_zoo = {'unet': U_Net_vanilla,'unetr': UNETR_2d,'unet_coord':U_Net_coord,'sunext':SUTM, 'sutm-i':SUTM_I,'swinunetr': SwinUNETR_2d}
     model = model_zoo[args.model](in_ch =args.in_ch,out_ch = args.nb_classes)
 
     if args.opt == 'SGD':

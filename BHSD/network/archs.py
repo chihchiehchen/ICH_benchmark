@@ -479,6 +479,35 @@ class UTM(nn.Module):
         out += self.skip(x)
         return self.act(out)
 
+class UTM_sup(nn.Module):
+    def __init__(self,out_ch,embed_dims=[ 128, 192, 256],in_chans =[32,64,128] ,num_classes = 6, rev = True):
+        super(UTM_sup,self).__init__()
+        self.multires = hourglass_iter(embed_dims=embed_dims,in_chans =in_chans)
+        self.norm = nn.BatchNorm2d(in_chans[0])
+        self.final = nn.Conv2d(out_ch, num_classes, kernel_size=1)
+        if rev:
+            self.mid = nn.GELU()
+            self.reverse = nn.Conv2d(num_classes,out_ch, kernel_size=1)
+        self.select = nn.Conv2d(in_chans[0],out_ch,kernel_size = 1)
+        self.skip = nn.Conv2d(in_chans[0],out_ch,kernel_size = 1)
+        self.act = nn.GELU()
+        self.rev = rev
+    def forward(self, x):
+        out = self.multires(x)
+        if self.rev:
+        
+            seg_out = self.final(out)
+            out = self.select(self.norm(out))
+            out += self.skip(x)
+        
+            out += self.reverse(self.mid(seg_out))
+        else:
+            out = self.select(self.norm(out))
+            out += self.skip(x)
+            seg_out = self.final(out)
+
+        return self.act(out),seg_out
+
 
 
 class SUTM(nn.Module):
@@ -499,3 +528,21 @@ class SUTM(nn.Module):
         return out
 #EOF
 
+class SUTM_I(nn.Module):
+    def __init__(self,out_ch = 6, in_ch=3, b_l =3,embed_dims=[  128,256,512],in_chans =[32,32,64,128],num_classes = 6):
+        super(SUTM_I,self).__init__()
+        self.coord = CoordConv2d(in_channels=in_ch, out_channels=in_chans[0],kernel_size = 3)
+        self.backbone = nn.ModuleList( [UTM_sup(in_chans = in_chans,out_ch = 32,embed_dims=embed_dims,num_classes= num_classes,rev = True) for i in range(b_l-1)] +[UTM_sup(in_chans = in_chans, out_ch = 32,embed_dims=embed_dims,num_classes= num_classes,rev = False) ] )
+        
+        self.l = b_l
+        
+
+    def forward(self, x):
+        
+        out = self.coord(x)
+        finallist = []
+        for i in range(self.l):
+            out,seg_out = self.backbone[i](out)
+            finallist.append(seg_out)
+        
+        return finallist
