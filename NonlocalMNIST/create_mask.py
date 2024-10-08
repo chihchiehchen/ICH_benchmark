@@ -6,7 +6,7 @@ from PIL import Image
 
 def parse_args():
     
-    parser.add_argument('--dir-list', type=str, default = ["/home/chihchiehchen/Exploring-a-Better-Network-Architecture-for-Large-Scale-ICH-Segmentation/mnist_png/mnist_png/training","/home/chihchiehchen/Exploring-a-Better-Network-Architecture-for-Large-Scale-ICH-Segmentation/mnist_png/mnist_png/testing"],nargs='+')
+    parser.add_argument('--dir-list', type=str, default = ["./mnist_png/training","./mnist_png/testing"],nargs='+')
     
     args = parser.parse_args()
     return args
