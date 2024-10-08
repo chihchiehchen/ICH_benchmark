@@ -77,23 +77,23 @@ def parse_args():
     parser.add_argument('--lr_scheduler', type=bool, default=False)
     parser.add_argument('--lr_min', type=float, default=0.00001)
     parser.add_argument('--epochs', type=int, default=60)
-    parser.add_argument('--img-size', type=int, default=512)
+    parser.add_argument('--img_size', type=int, default=512)
     parser.add_argument('--img-key', type=int, default=255)
     parser.add_argument('--parallel', type=bool, default=False)
     parser.add_argument('--transform', type=str, choices=['resize','center_scaling'],
                         default='resize') 
     parser.add_argument('--balance', type=str, choices=['normal','weight','extreme'],
                         default='normal')
-    parser.add_argument('--balance', type=str,default='False')
+    parser.add_argument('--background', type=bool,default=False)
     parser.add_argument('--model', type=str, choices=['unet','unet_coord','sutm','unetr','swinunetr'],
                         default='unet')  #todo 
     parser.add_argument('--opt', type=str, default='AdamW')
     parser.add_argument('--cutmix_prob', type=float, default=0.7)
     parser.add_argument('--cutmix', type=int, default=-100)
-    parser.add_argument('--val-dir', default="/home/chihchiehchen/Exploring-a-Better-Network-Architecture-for-Large-Scale-ICH-Segmentation/mnist_png/mnist_png/testing", type=str, help='val_dir')
-    parser.add_argument('--train-dir', default="/home/chihchiehchen/Exploring-a-Better-Network-Architecture-for-Large-Scale-ICH-Segmentation/mnist_png/mnist_png/training", type=str, help='ich_dir')
+    parser.add_argument('--val-dir', default="./mnist_png/testing", type=str, help='val_dir')
+    parser.add_argument('--train-dir', default="./mnist_png/training", type=str, help='ich_dir')
     parser.add_argument('--in-ch', type=int, default=3)
-    parser.add_argument('--nb-classes', type=int, default=11)
+    parser.add_argument('--nb_classes', type=int, default=11)
     parser.add_argument('--class-weights', type=float, default = [1,1,1,1,1,1,1,1,1,1,1],nargs='+')
     parser.add_argument('--save-model-path', type=str, default='./') 
     
@@ -111,14 +111,14 @@ def main(args):
     
     
 
-    valset = MNISTResizeDataset(img_dir = args.val_dir, background = args.background,  balance = args.balance ,transform = transform_dict[args.transform])
+    valset = MNISTResizeDataset(img_dir = args.val_dir,img_size =args.img_size ,background = args.background,  balance = args.balance ,transform = transform_dict[args.transform])
     valloader = DataLoader(valset, batch_size=4,shuffle=False, pin_memory=True, num_workers=4, drop_last=False)
     
 
     global MODE
     MODE = 'train'
 
-    trainset = MNISTResizeDataset(img_dir = args.train_dir,ackground = args.background,  balance = args.balance, transform = transform_dict[args.transform])
+    trainset = MNISTResizeDataset(img_dir = args.train_dir,img_size =args.img_size,background = args.background,  balance = args.balance, transform = transform_dict[args.transform])
     
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True,
                              pin_memory=True, num_workers=8, drop_last=True)
@@ -137,7 +137,7 @@ def main(args):
     
 
 def init_basic_elems(args):
-    model_zoo = {'unet': U_Net_vanilla,'unetr': UNETR_2d,'unet_coord':U_Net_coord,'sunext':SUTM, 'swinunetr': SwinUNETR_2d} # todo: setup models
+    model_zoo = {'unet': U_Net_vanilla,'unetr': UNETR_2d,'unet_coord':U_Net_coord,'sutm':SUTM, 'swinunetr': SwinUNETR_2d} # todo: setup models
     model = model_zoo[args.model](in_ch =args.in_ch,out_ch = args.nb_classes - int(args.background))
 
     if args.opt == 'SGD':
@@ -167,7 +167,7 @@ def train(model, trainloader, valloader, optimizer, args ,add_normal = None,lr_s
 
     if MODE == 'train':
         checkpoints = []
-    weights = args.class_weights[ :args.nb_classses - int(args.background)+1]
+    weights = args.class_weights[ :args.nb_classes - int(args.background)+1]
     class_weights = torch.FloatTensor(weights).cuda()
     if add_normal != None:
         dataloader_iterator = iter(add_normal)
@@ -186,7 +186,7 @@ def train(model, trainloader, valloader, optimizer, args ,add_normal = None,lr_s
 
             if args.cutmix >= -1:
                 if epoch >= args.cutmix:
-                    l_img, l_mask = vrm(l_img, l_mask, args)
+                    l_img, l_mask = cutmix(l_img, l_mask, args)
             
             l_pred = model(l_img)     
 
@@ -206,7 +206,7 @@ def train(model, trainloader, valloader, optimizer, args ,add_normal = None,lr_s
             
             iters += 1
 
-            optimizer.param_groups[0]["lr"] = lr
+            
             
 
             tbar.set_description('Loss: %.3f' % (total_loss / (i + 1)))

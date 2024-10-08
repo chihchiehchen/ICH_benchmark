@@ -5,7 +5,7 @@ Since our collected ICH datasets are unavailable, we construct simulated dataset
 ## Create masks for MNIST simulated segmentation dataset
    Extract mnist_png.tar.gz in the repository, find train and test directories and run 
    ```bash
-   python create_mask.py --dir_list address_of_training_directories address_of_testing_directories
+   python create_mask.py 
    ```
 
 ## Requirements

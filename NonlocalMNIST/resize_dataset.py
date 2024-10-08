@@ -1,9 +1,9 @@
+from webbrowser import BackgroundBrowser
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import pandas as pd
 import os, numpy as np
 from PIL import Image
-from utils.utils import get_subdf
 from natsort import natsorted
 import PIL,cv2
 
@@ -30,7 +30,7 @@ from albumentations import (
 )
 
 class MNISTResizeDataset(Dataset):
-    def __init__(self, img_dir, img_size = 512 , backgound = False, balance = 'normal' ,transform=[ShiftScaleRotate(scale_limit=(0,0.20), rotate_limit=15, shift_limit=0.1, p=0.5, border_mode=cv2.BORDER_CONSTANT, value=0)]):
+    def __init__(self, img_dir, img_size = 512 , background = False, balance = 'normal' ,transform=[ShiftScaleRotate(scale_limit=(0,0.20), rotate_limit=15, shift_limit=0.1, p=0.5, border_mode=cv2.BORDER_CONSTANT, value=0)]):
         
         self.img_dir = img_dir
         self.mask_dir = img_dir + "_mask"
@@ -38,6 +38,8 @@ class MNISTResizeDataset(Dataset):
         self.img_size = img_size
         self.pair_list = []
         self.key_ratio = 255 // 10
+        self.background = background 
+        self.balance = balance
         self.prepare_dir()
     def __len__(self):
         return len(self.pair_list)
@@ -46,9 +48,9 @@ class MNISTResizeDataset(Dataset):
         for dirPath, dirNames, fileNames in os.walk(self.img_dir):
             for f in fileNames:
                 if len(fileNames) >0 and  '.png' in fileNames[0]:
-                    if balance == 'normal':
+                    if self.balance == 'normal':
                         count = len(fileNames)
-                    elif balance == 'weight':
+                    elif self.balance == 'weight':
                         count = (10- int(dirPath.split("/")[-1]))*len(fileNames)//10
                     else:
                         count =  max(int(  ( ( 10- int(dirPath.split("/")[-1]) )/10)**2*len(fileNames)),50) 
@@ -75,7 +77,7 @@ class MNISTResizeDataset(Dataset):
         targetmask = np.array(targetmask) #change to numpy
             
         targetmask = np.round((targetmask*(1/self.key_ratio)))
-        if background:
+        if self.background:
             targetmask = np.where(targetmask >0, targetmask -1, targetmask)
         targetmask = targetmask.astype('int')
         #assert set(np.unique(targetmask).tolist()).issubset(set([x for x in range(self.nb_classes)])) 
